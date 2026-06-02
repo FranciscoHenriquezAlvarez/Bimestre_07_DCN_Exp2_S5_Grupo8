@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -18,10 +19,15 @@ import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -49,8 +55,11 @@ class InscripcionControllerIntegrationTest {
     @Autowired
     private EstudianteRepository estudianteRepository;
 
+    @Value("${app.archivos.resumenes-path}")
+    private String resumenesPath;
+
     @BeforeEach
-    void setUp() {
+    void setUp() throws IOException {
         // Limpia primero las tablas hijas para evitar errores de llave foranea
         detalleInscripcionRepository.deleteAll();
 
@@ -58,6 +67,8 @@ class InscripcionControllerIntegrationTest {
         inscripcionRepository.deleteAll();
         estudianteRepository.deleteAll();
         cursoRepository.deleteAll();
+
+        limpiarResumenes();
     }
 
     @Test
@@ -102,6 +113,13 @@ class InscripcionControllerIntegrationTest {
         assertThat(response.get("totalPagar").decimalValue()).isEqualByComparingTo(new BigDecimal("90000"));
     }
 
+    @Test
+    void debeRetornar404CuandoLaInscripcionNoExisteAlGenerarArchivo() throws Exception {
+        mockMvc.perform(post("/api/inscripciones/999/generar-archivo"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Inscripcion no encontrada"));
+    }
+
     private Estudiante crearEstudiante(String nombre, String correo) {
         Estudiante estudiante = new Estudiante();
         estudiante.setNombre(nombre);
@@ -116,6 +134,24 @@ class InscripcionControllerIntegrationTest {
         curso.setDuracionHoras(duracionHoras);
         curso.setCosto(new BigDecimal(costo));
         return curso;
+    }
+
+    private void limpiarResumenes() throws IOException {
+        Path directorio = Path.of(resumenesPath);
+        if (!Files.exists(directorio)) {
+            return;
+        }
+
+        try (var paths = Files.walk(directorio)) {
+            paths.sorted(Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException exception) {
+                            throw new RuntimeException(exception);
+                        }
+                    });
+        }
     }
 
     private record InscripcionPayload(Long estudianteId, List<Long> cursosIds) {

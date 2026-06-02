@@ -2,28 +2,53 @@
 
 ## Objetivo del proyecto
 
-Este proyecto corresponde a la asignatura Desarrollo Cloud Native, Semana 1.
-La aplicacion implementa una API REST simple para gestionar cursos, estudiantes e inscripciones en una plataforma educativa.
+Este proyecto corresponde a la asignatura Desarrollo Cloud Native.
+La base de Semana 01 implementa una API REST para gestionar cursos, estudiantes e inscripciones.
+La actualizacion de Semana 02 agrega generacion de archivos `.txt` para los resumenes de inscripcion y su almacenamiento en AWS S3, manteniendo la logica de negocio existente.
+
+## Caso de uso
+
+La aplicacion representa una plataforma educativa que permite registrar inscripciones de estudiantes en cursos virtuales.
+Cada inscripcion genera un resumen con:
+
+- Numero de inscripcion
+- Nombre del estudiante
+- Fecha de inscripcion
+- Cursos inscritos
+- Costo de cada curso
+- Total a pagar
+
+Ese resumen ahora puede:
+
+- Guardarse localmente en el servidor o computador
+- Subirse a AWS S3
+- Consultarse en S3
+- Descargarse desde S3
+- Reemplazarse en S3
+- Eliminarse desde S3
 
 ## Tecnologias usadas
 
 - Java 17
-- Spring Boot
+- Spring Boot 4.0.6
 - Spring Web
 - Spring Data JPA
 - Spring Validation
+- AWS SDK for Java 2.x
 - Oracle Database
 - H2 para pruebas
 - Maven Wrapper
 - Docker
+- Docker Compose
 - GitHub Actions
 - Docker Hub
 - Amazon EC2
 
-## Estructura del proyecto
+## Estructura principal
 
 ```text
 src/main/java/com/duoc/cloudnativeapp
+├── config
 ├── controller
 ├── dto
 ├── exception
@@ -33,70 +58,25 @@ src/main/java/com/duoc/cloudnativeapp
 └── CloudnativeappApplication.java
 ```
 
-## Entidades principales
+Archivos relevantes de Semana 02:
 
-- `Curso`: guarda nombre, instructor, duracion y costo.
-- `Estudiante`: guarda nombre y correo.
-- `Inscripcion`: relaciona a un estudiante con una fecha y un total.
-- `DetalleInscripcion`: guarda cada curso seleccionado en la inscripcion.
+- `src/main/java/com/duoc/cloudnativeapp/config/S3Config.java`
+- `src/main/java/com/duoc/cloudnativeapp/service/ResumenArchivoService.java`
+- `src/main/java/com/duoc/cloudnativeapp/service/S3StorageService.java`
+- `src/main/java/com/duoc/cloudnativeapp/dto/ArchivoResumenResponseDTO.java`
+- `docker-compose.ec2.yml`
+- `.github/workflows/deploy.yml`
 
-## Endpoints disponibles
+## Endpoints base de Semana 01
 
-### 1. Listar cursos
+- `GET /api/cursos`
+- `POST /api/cursos`
+- `GET /api/estudiantes`
+- `POST /api/estudiantes`
+- `GET /api/inscripciones`
+- `POST /api/inscripciones`
 
-`GET /api/cursos`
-
-Respuesta ejemplo:
-
-```json
-[
-  {
-    "id": 1,
-    "nombre": "Spring Boot Basico",
-    "instructor": "Carlos Valverde",
-    "duracionHoras": 20,
-    "costo": 50000
-  }
-]
-```
-
-### 2. Crear curso
-
-`POST /api/cursos`
-
-Request:
-
-```json
-{
-  "nombre": "Spring Boot Basico",
-  "instructor": "Carlos Valverde",
-  "duracionHoras": 20,
-  "costo": 50000
-}
-```
-
-### 3. Crear estudiante
-
-`POST /api/estudiantes`
-
-Request:
-
-```json
-{
-  "nombre": "Francisco Henriquez",
-  "correo": "francisco@email.com"
-}
-```
-
-### 4. Listar estudiantes
-
-`GET /api/estudiantes`
-
-### 5. Crear inscripcion
-
-`POST /api/inscripciones`
-
-Request:
+Ejemplo de creacion de inscripcion:
 
 ```json
 {
@@ -111,7 +91,7 @@ Respuesta ejemplo:
 {
   "inscripcionId": 1,
   "estudiante": "Francisco Henriquez",
-  "fechaInscripcion": "2026-05-25",
+  "fechaInscripcion": "2026-06-01",
   "cursos": [
     {
       "cursoId": 1,
@@ -128,70 +108,241 @@ Respuesta ejemplo:
 }
 ```
 
-### 6. Listar inscripciones
+## Semana 02 - AWS S3
 
-`GET /api/inscripciones`
+### Objetivo de la actualizacion
 
-## Variables de entorno necesarias
+La creacion del resumen de inscripcion ahora permite generar un archivo fisico `.txt` y administrarlo en AWS S3 usando una carpeta por numero de inscripcion.
 
-La aplicacion usa variables de entorno para conectarse a Oracle Cloud:
+Ruta local por defecto:
+
+```text
+archivos/resumenes/resumen-inscripcion-{inscripcionId}.txt
+```
+
+Estructura esperada en S3:
+
+```text
+resumenes/{inscripcionId}/resumen-inscripcion-{inscripcionId}.txt
+```
+
+### Variables de entorno necesarias
 
 ```bash
 export DB_URL=jdbc:oracle:thin:@servidor:1521/servicio
 export DB_USERNAME=usuario
 export DB_PASSWORD=clave
 export SERVER_PORT=8080
+export AWS_REGION=us-east-1
+export AWS_ACCESS_KEY_ID=tu_access_key
+export AWS_SECRET_ACCESS_KEY=tu_secret_key
+export AWS_SESSION_TOKEN=tu_session_token
+export AWS_S3_BUCKET_NAME=tu_bucket
+export RESUMENES_PATH=archivos/resumenes
+```
+
+### Endpoints nuevos
+
+#### 1. Generar archivo local
+
+`POST /api/inscripciones/{inscripcionId}/generar-archivo`
+
+Respuesta ejemplo:
+
+```json
+{
+  "mensaje": "Archivo generado correctamente",
+  "rutaLocal": "/ruta/del/proyecto/archivos/resumenes/resumen-inscripcion-1.txt",
+  "nombreArchivo": "resumen-inscripcion-1.txt",
+  "bucket": null,
+  "key": null,
+  "existe": null
+}
+```
+
+#### 2. Subir archivo a S3
+
+`POST /api/inscripciones/{inscripcionId}/subir-s3`
+
+Si el archivo local no existe, el sistema lo genera antes de subirlo.
+
+#### 3. Reemplazar archivo en S3
+
+`PUT /api/inscripciones/{inscripcionId}/reemplazar-s3`
+
+Regenera el archivo local y reemplaza el objeto en la misma key.
+Si el archivo no existia en S3, se crea y el mensaje lo indica claramente.
+
+#### 4. Consultar archivo en S3
+
+`GET /api/inscripciones/{inscripcionId}/consultar-s3`
+
+Respuesta ejemplo:
+
+```json
+{
+  "mensaje": "Consulta realizada correctamente",
+  "rutaLocal": null,
+  "nombreArchivo": null,
+  "bucket": "mi-bucket",
+  "key": "resumenes/1/resumen-inscripcion-1.txt",
+  "existe": true
+}
+```
+
+#### 5. Descargar archivo desde S3
+
+`GET /api/inscripciones/{inscripcionId}/descargar-s3`
+
+- Respuesta como attachment
+- `Content-Type: text/plain`
+- `Content-Disposition: attachment; filename="resumen-inscripcion-{id}.txt"`
+
+#### 6. Eliminar archivo en S3
+
+`DELETE /api/inscripciones/{inscripcionId}/eliminar-s3`
+
+Si el archivo no existe en S3, la API responde `404`.
+
+### Ejemplos de pruebas en Postman
+
+1. Crear datos base:
+
+```http
+POST /api/cursos
+POST /api/estudiantes
+POST /api/inscripciones
+```
+
+2. Generar archivo local:
+
+```http
+POST /api/inscripciones/1/generar-archivo
+```
+
+3. Subir el resumen a S3:
+
+```http
+POST /api/inscripciones/1/subir-s3
+```
+
+4. Verificar si el archivo existe:
+
+```http
+GET /api/inscripciones/1/consultar-s3
+```
+
+5. Descargar el archivo:
+
+```http
+GET /api/inscripciones/1/descargar-s3
+```
+
+6. Reemplazar el archivo:
+
+```http
+PUT /api/inscripciones/1/reemplazar-s3
+```
+
+7. Eliminar el archivo:
+
+```http
+DELETE /api/inscripciones/1/eliminar-s3
 ```
 
 ## Ejecucion local
 
-1. Dar permisos al wrapper si hace falta:
+Dar permisos al wrapper si hace falta:
 
 ```bash
 chmod +x mvnw
 ```
 
-2. Ejecutar la aplicacion:
+Levantar la aplicacion:
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-## Ejecucion de pruebas
+## Pruebas
 
 Las pruebas usan H2 y el perfil `test`.
+No ejecutan llamadas reales contra AWS.
 
 ```bash
 ./mvnw clean test
 ```
 
-## Construccion de imagen Docker
+## Dockerfile multistage
+
+Se mantiene el `Dockerfile` multistage de Semana 01:
+
+- Etapa `build` con `eclipse-temurin:17-jdk`
+- Etapa `runtime` con `eclipse-temurin:17-jre`
+
+Construccion local:
 
 ```bash
 docker build -t cloudnativeapp .
-docker run -p 8080:8080 \
-  -e DB_URL="$DB_URL" \
-  -e DB_USERNAME="$DB_USERNAME" \
-  -e DB_PASSWORD="$DB_PASSWORD" \
-  -e SERVER_PORT=8080 \
-  cloudnativeapp
 ```
 
-## Pipeline de GitHub Actions
+## Docker Compose en EC2
 
-El workflow `.github/workflows/deploy.yml` realiza lo siguiente cuando se hace push a `main`:
+Para el despliegue en EC2 ahora se usa `docker compose` en lugar de `docker run` directo.
+El archivo `docker-compose.ec2.yml` define el servicio `cloudnativeapp` con:
 
-1. Descarga el codigo.
-2. Configura Java 17.
-3. Ejecuta las pruebas con Maven.
-4. Construye la imagen Docker.
-5. Publica la imagen en Docker Hub.
-6. Se conecta por SSH a EC2.
-7. Descarga la nueva imagen.
-8. Reemplaza el contenedor anterior.
-9. Levanta la aplicacion con variables de entorno.
+- Imagen publicada en Docker Hub
+- `container_name`
+- Puerto `8080`
+- `restart: unless-stopped`
+- Variables de entorno de base de datos y AWS
+- Volumen del Oracle Wallet
+- Carpeta persistente para los resumenes locales
 
-## Secrets en GitHub
+En el servidor se usa una carpeta como:
+
+```text
+/home/ec2-user/cloudnativeapp
+```
+
+## Pipeline CI/CD
+
+El workflow `.github/workflows/deploy.yml` mantiene el flujo principal de Semana 01:
+
+1. `actions/checkout@v4`
+2. `actions/setup-java@v4`
+3. `chmod +x mvnw`
+4. `./mvnw clean test`
+5. `docker/login-action@v3`
+6. `docker build`
+7. `docker push`
+8. Despliegue por SSH a EC2
+
+Mejoras aplicadas en Semana 02:
+
+- Login seguro dentro de EC2 con `--password-stdin`
+- Publicacion de dos tags de imagen:
+  - `latest`
+  - `${github.sha}`
+- Despliegue con `docker compose pull` y `docker compose up -d`
+- Archivo `.env` generado en EC2 con variables de entorno
+- Uso de carpeta de despliegue dedicada en `/home/ec2-user/cloudnativeapp`
+
+### Mejora de seguridad aplicada
+
+Se reemplazo esta practica:
+
+```bash
+docker login -u "usuario" -p "token"
+```
+
+Por esta alternativa mas segura:
+
+```bash
+echo "token" | docker login -u "usuario" --password-stdin
+```
+
+## Secrets de GitHub requeridos
 
 - `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN`
@@ -201,12 +352,10 @@ El workflow `.github/workflows/deploy.yml` realiza lo siguiente cuando se hace p
 - `DB_URL`
 - `DB_USERNAME`
 - `DB_PASSWORD`
-- `SERVER_PORT` con valor `8080`
+- `SERVER_PORT`
+- `AWS_REGION`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_SESSION_TOKEN`
+- `AWS_S3_BUCKET_NAME`
 
-## Pasos simples para desplegar en EC2
-
-1. Instalar Docker en la instancia.
-2. Abrir el puerto 8080 en el security group.
-3. Crear los secrets en GitHub.
-4. Hacer push a la rama `main`.
-5. Verificar el workflow y luego probar la API en EC2.

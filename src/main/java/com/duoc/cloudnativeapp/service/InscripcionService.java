@@ -43,6 +43,14 @@ public class InscripcionService {
                 .toList();
     }
 
+    // Se reutiliza para validar la inscripcion y entregar el resumen completo.
+    public InscripcionResumenDTO obtenerPorId(Long id) {
+        Inscripcion inscripcion = inscripcionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Inscripcion no encontrada"));
+
+        return convertirAResumenDTO(inscripcion);
+    }
+
     public InscripcionResumenDTO guardar(InscripcionRequestDTO inscripcionRequestDTO) {
         // Valida que el estudiante exista antes de registrar la inscripcion
         Estudiante estudiante = estudianteRepository.findById(inscripcionRequestDTO.getEstudianteId())

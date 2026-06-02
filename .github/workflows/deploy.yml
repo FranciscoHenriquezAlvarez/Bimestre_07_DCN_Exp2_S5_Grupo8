@@ -6,8 +6,12 @@ on:
       - main
 
 env:
+  IMAGE_REPOSITORY: ${{ secrets.DOCKERHUB_USERNAME }}/cloudnativeapp
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/cloudnativeapp:latest
+  IMAGE_NAME_SHA: ${{ secrets.DOCKERHUB_USERNAME }}/cloudnativeapp:${{ github.sha }}
+  IMAGE_TAG: latest
   CONTAINER_NAME: cloudnativeapp
+  DEPLOY_PATH: /home/ec2-user/cloudnativeapp
 
 jobs:
   build-test-deploy:
@@ -37,10 +41,12 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Construir imagen Docker
-        run: docker build -t $IMAGE_NAME .
+        run: docker build -t $IMAGE_NAME -t $IMAGE_NAME_SHA .
 
-      - name: Publicar imagen en Docker Hub
-        run: docker push $IMAGE_NAME
+      - name: Publicar imagenes en Docker Hub
+        run: |
+          docker push $IMAGE_NAME
+          docker push $IMAGE_NAME_SHA
 
       - name: Desplegar en EC2 por SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -49,19 +55,51 @@ jobs:
           username: ${{ secrets.USER_SERVER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" -p "${{ secrets.DOCKERHUB_TOKEN }}"
-            docker pull ${{ env.IMAGE_NAME }}
-            if [ "$(docker ps -aq -f name=${{ env.CONTAINER_NAME }})" ]; then
-              docker stop ${{ env.CONTAINER_NAME }} || true
-              docker rm ${{ env.CONTAINER_NAME }} || true
-            fi
-            docker run -d \
-              --name ${{ env.CONTAINER_NAME }} \
-              --restart unless-stopped \
-              -p 8080:8080 \
-              -e DB_URL="${{ secrets.DB_URL }}" \
-              -e DB_USERNAME="${{ secrets.DB_USERNAME }}" \
-              -e DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
-              -e SERVER_PORT="${{ secrets.SERVER_PORT }}" \
-              -v /home/ec2-user/wallets/Wallet_cloudnativeapp:/app/wallet:ro \
-              ${{ env.IMAGE_NAME }}
+            DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
+
+            mkdir -p "$DEPLOY_PATH/archivos/resumenes"
+            cd "$DEPLOY_PATH"
+
+            cat > docker-compose.ec2.yml <<'EOF'
+            services:
+              cloudnativeapp:
+                image: ${IMAGE_NAME}:${IMAGE_TAG:-latest}
+                container_name: ${CONTAINER_NAME:-cloudnativeapp}
+                restart: unless-stopped
+                ports:
+                  - "8080:8080"
+                environment:
+                  DB_URL: ${DB_URL}
+                  DB_USERNAME: ${DB_USERNAME}
+                  DB_PASSWORD: ${DB_PASSWORD}
+                  SERVER_PORT: ${SERVER_PORT:-8080}
+                  AWS_REGION: ${AWS_REGION}
+                  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+                  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+                  AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
+                  AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME}
+                  RESUMENES_PATH: ${RESUMENES_PATH:-/app/archivos/resumenes}
+                volumes:
+                  - /home/ec2-user/wallets/Wallet_cloudnativeapp:/app/wallet:ro
+                  - /home/ec2-user/cloudnativeapp/archivos/resumenes:${RESUMENES_PATH:-/app/archivos/resumenes}
+            EOF
+
+            cat > .env <<'EOF'
+            IMAGE_NAME=${{ env.IMAGE_REPOSITORY }}
+            IMAGE_TAG=${{ env.IMAGE_TAG }}
+            CONTAINER_NAME=${{ env.CONTAINER_NAME }}
+            DB_URL=${{ secrets.DB_URL }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            SERVER_PORT=${{ secrets.SERVER_PORT }}
+            AWS_REGION=${{ secrets.AWS_REGION }}
+            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            AWS_SESSION_TOKEN=${{ secrets.AWS_SESSION_TOKEN }}
+            AWS_S3_BUCKET_NAME=${{ secrets.AWS_S3_BUCKET_NAME }}
+            RESUMENES_PATH=/app/archivos/resumenes
+            EOF
+
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            docker compose -f docker-compose.ec2.yml pull
+            docker compose -f docker-compose.ec2.yml up -d --remove-orphans
