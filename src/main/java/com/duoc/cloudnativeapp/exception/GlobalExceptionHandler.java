@@ -57,6 +57,54 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(InscripcionNoEncontradaException.class)
+    public ResponseEntity<ApiErrorResponse> handleInscripcionNoEncontradaException(InscripcionNoEncontradaException exception,
+                                                                                   HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(crearError(
+                        HttpStatus.NOT_FOUND.value(),
+                        HttpStatus.NOT_FOUND.getReasonPhrase(),
+                        exception.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(ArchivoNoEncontradoException.class)
+    public ResponseEntity<ApiErrorResponse> handleArchivoNoEncontradoException(ArchivoNoEncontradoException exception,
+                                                                               HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(crearError(
+                        HttpStatus.NOT_FOUND.value(),
+                        HttpStatus.NOT_FOUND.getReasonPhrase(),
+                        exception.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(ArchivoLocalException.class)
+    public ResponseEntity<ApiErrorResponse> handleArchivoLocalException(ArchivoLocalException exception,
+                                                                        HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(crearError(
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                        HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
+                        exception.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(S3StorageException.class)
+    public ResponseEntity<ApiErrorResponse> handleS3StorageException(S3StorageException exception,
+                                                                     HttpServletRequest request) {
+        return ResponseEntity.status(exception.getStatus())
+                .body(crearError(
+                        exception.getStatus().value(),
+                        exception.getStatus().getReasonPhrase(),
+                        exception.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGenericException(Exception exception, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

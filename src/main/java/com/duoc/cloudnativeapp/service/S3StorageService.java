@@ -1,12 +1,14 @@
 package com.duoc.cloudnativeapp.service;
 
 import com.duoc.cloudnativeapp.dto.ArchivoResumenResponseDTO;
+import com.duoc.cloudnativeapp.exception.ArchivoNoEncontradoException;
+import com.duoc.cloudnativeapp.exception.S3StorageException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import org.springframework.web.server.ResponseStatusException;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -46,8 +48,10 @@ public class S3StorageService {
                             .build(),
                     RequestBody.fromFile(archivo)
             );
+        } catch (SdkClientException exception) {
+            throw crearErrorConexionS3("No fue posible conectar con AWS S3 para subir el archivo", exception);
         } catch (S3Exception exception) {
-            throw crearErrorS3("No fue posible subir el archivo a S3", exception);
+            throw crearErrorOperacionS3("No fue posible subir el archivo a S3", exception);
         }
 
         return new ArchivoResumenResponseDTO(
@@ -91,7 +95,7 @@ public class S3StorageService {
 
         String key = construirKey(inscripcionId);
         if (!existeArchivo(inscripcionId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "El archivo no existe en S3");
+            throw new ArchivoNoEncontradoException("El archivo no existe en S3");
         }
 
         try {
@@ -102,8 +106,10 @@ public class S3StorageService {
                             .build()
             );
             return archivo.asByteArray();
+        } catch (SdkClientException exception) {
+            throw crearErrorConexionS3("No fue posible conectar con AWS S3 para descargar el archivo", exception);
         } catch (S3Exception exception) {
-            throw crearErrorS3("No fue posible descargar el archivo desde S3", exception);
+            throw crearErrorOperacionS3("No fue posible descargar el archivo desde S3", exception);
         }
     }
 
@@ -113,7 +119,7 @@ public class S3StorageService {
 
         String key = construirKey(inscripcionId);
         if (!existeArchivo(inscripcionId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "El archivo no existe en S3");
+            throw new ArchivoNoEncontradoException("El archivo no existe en S3");
         }
 
         try {
@@ -121,8 +127,10 @@ public class S3StorageService {
                     .bucket(bucketName)
                     .key(key)
                     .build());
+        } catch (SdkClientException exception) {
+            throw crearErrorConexionS3("No fue posible conectar con AWS S3 para eliminar el archivo", exception);
         } catch (S3Exception exception) {
-            throw crearErrorS3("No fue posible eliminar el archivo desde S3", exception);
+            throw crearErrorOperacionS3("No fue posible eliminar el archivo desde S3", exception);
         }
 
         return new ArchivoResumenResponseDTO(
@@ -150,22 +158,28 @@ public class S3StorageService {
                     .key(key)
                     .build());
             return true;
+        } catch (SdkClientException exception) {
+            throw crearErrorConexionS3("No fue posible conectar con AWS S3 para consultar el archivo", exception);
         } catch (S3Exception exception) {
             if (exception.statusCode() == 404) {
                 return false;
             }
 
-            throw crearErrorS3("No fue posible consultar el archivo en S3", exception);
+            throw crearErrorOperacionS3("No fue posible consultar el archivo en S3", exception);
         }
     }
 
     private void validarBucketConfigurado() {
         if (!StringUtils.hasText(bucketName)) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "El bucket S3 no esta configurado");
+            throw new S3StorageException("El bucket S3 no esta configurado", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    private ResponseStatusException crearErrorS3(String mensaje, AwsServiceException exception) {
-        return new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, mensaje);
+    private S3StorageException crearErrorOperacionS3(String mensaje, AwsServiceException exception) {
+        return new S3StorageException(mensaje, HttpStatus.INTERNAL_SERVER_ERROR, exception);
+    }
+
+    private S3StorageException crearErrorConexionS3(String mensaje, SdkClientException exception) {
+        return new S3StorageException(mensaje, HttpStatus.SERVICE_UNAVAILABLE, exception);
     }
 }

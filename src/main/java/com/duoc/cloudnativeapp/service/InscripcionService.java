@@ -3,6 +3,7 @@ package com.duoc.cloudnativeapp.service;
 import com.duoc.cloudnativeapp.dto.DetalleInscripcionResumenDTO;
 import com.duoc.cloudnativeapp.dto.InscripcionRequestDTO;
 import com.duoc.cloudnativeapp.dto.InscripcionResumenDTO;
+import com.duoc.cloudnativeapp.exception.InscripcionNoEncontradaException;
 import com.duoc.cloudnativeapp.model.Curso;
 import com.duoc.cloudnativeapp.model.DetalleInscripcion;
 import com.duoc.cloudnativeapp.model.Estudiante;
@@ -46,7 +47,7 @@ public class InscripcionService {
     // Se reutiliza para validar la inscripcion y entregar el resumen completo.
     public InscripcionResumenDTO obtenerPorId(Long id) {
         Inscripcion inscripcion = inscripcionRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Inscripcion no encontrada"));
+                .orElseThrow(() -> new InscripcionNoEncontradaException(id));
 
         return convertirAResumenDTO(inscripcion);
     }

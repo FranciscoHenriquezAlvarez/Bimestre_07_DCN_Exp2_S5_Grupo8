@@ -3,6 +3,7 @@ package com.duoc.cloudnativeapp.service;
 import com.duoc.cloudnativeapp.dto.ArchivoResumenResponseDTO;
 import com.duoc.cloudnativeapp.dto.DetalleInscripcionResumenDTO;
 import com.duoc.cloudnativeapp.dto.InscripcionResumenDTO;
+import com.duoc.cloudnativeapp.exception.ArchivoLocalException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,6 +17,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,5 +57,25 @@ class ResumenArchivoServiceTest {
                 .contains("Spring Boot Basico")
                 .contains("Docker Basico")
                 .contains("Total a pagar: 90000");
+    }
+
+    @Test
+    void debeRetornarErrorClaroCuandoNoPuedeGenerarArchivoLocal() throws Exception {
+        Path rutaArchivo = Files.createFile(tempDir.resolve("salida-bloqueada.txt"));
+
+        when(inscripcionService.obtenerPorId(1L)).thenReturn(new InscripcionResumenDTO(
+                1L,
+                "Francisco Henriquez",
+                LocalDate.of(2026, 6, 1),
+                List.of(new DetalleInscripcionResumenDTO(10L, "Spring Boot Basico", new BigDecimal("50000"))),
+                new BigDecimal("50000")
+        ));
+
+        ResumenArchivoService resumenArchivoService =
+                new ResumenArchivoService(inscripcionService, rutaArchivo.toString());
+
+        assertThatThrownBy(() -> resumenArchivoService.generarArchivo(1L))
+                .isInstanceOf(ArchivoLocalException.class)
+                .hasMessage("No fue posible generar el archivo local del resumen");
     }
 }

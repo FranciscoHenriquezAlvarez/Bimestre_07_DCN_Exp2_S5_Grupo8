@@ -117,7 +117,7 @@ class InscripcionControllerIntegrationTest {
     void debeRetornar404CuandoLaInscripcionNoExisteAlGenerarArchivo() throws Exception {
         mockMvc.perform(post("/api/inscripciones/999/generar-archivo"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").value("Inscripcion no encontrada"));
+                .andExpect(jsonPath("$.message").value("Inscripcion no encontrada: 999"));
     }
 
     private Estudiante crearEstudiante(String nombre, String correo) {

@@ -3,9 +3,9 @@ package com.duoc.cloudnativeapp.service;
 import com.duoc.cloudnativeapp.dto.ArchivoResumenResponseDTO;
 import com.duoc.cloudnativeapp.dto.DetalleInscripcionResumenDTO;
 import com.duoc.cloudnativeapp.dto.InscripcionResumenDTO;
+import com.duoc.cloudnativeapp.exception.ArchivoLocalException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -60,11 +60,8 @@ public class ResumenArchivoService {
             Path archivo = obtenerRutaArchivo(inscripcionId);
             Files.writeString(archivo, construirContenido(resumen), StandardCharsets.UTF_8);
             return archivo;
-        } catch (IOException exception) {
-            throw new ResponseStatusException(
-                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
-                    "No fue posible generar el archivo del resumen"
-            );
+        } catch (IOException | SecurityException exception) {
+            throw new ArchivoLocalException("No fue posible generar el archivo local del resumen", exception);
         }
     }
 
