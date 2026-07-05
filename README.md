@@ -5,7 +5,7 @@
 Este proyecto corresponde a la asignatura Desarrollo Cloud Native de Duoc UC.
 La aplicacion representa una plataforma educativa para la gestion de cursos, estudiantes e inscripciones, permitiendo registrar una inscripcion y generar su resumen asociado.
 
-La documentacion de este `README.md` consolida la evolucion del proyecto como una continuidad academica desde Semana 01, pasando por Semana 02, hasta la actualizacion documental de Semana 04.
+La documentacion de este `README.md` consolida la evolucion del proyecto como una continuidad academica desde Semana 01 y Semana 02, considerando la base funcional de Semana 04 y su actual alineacion a Semana 05.
 
 ## Continuidad del desarrollo por semanas
 
@@ -35,7 +35,18 @@ En esta etapa se prepara el proyecto para ser expuesto mediante AWS API Gateway:
 - se incorpora un endpoint de salud para validacion rapida del despliegue;
 - se considera autenticacion basada en JWT gestionada externamente por IDaaS;
 - la validacion JWT se gestiona en API Gateway mediante JWT Authorizer;
-- no se agrega `Spring Security` en esta version del backend.
+- se mantiene la integracion del backend con Oracle Cloud y las operaciones de resumen en AWS S3.
+
+### Semana 05
+
+En esta etapa se mantiene la arquitectura de Semana 04 y se agrega una segunda capa de validacion en el backend:
+
+- se conserva AWS API Gateway como API Manager;
+- se conserva el uso de IDaaS con Azure AD B2C para emision de tokens JWT;
+- se incorpora `Spring Security` en el backend;
+- la aplicacion Spring Boot funciona como `OAuth2 Resource Server`;
+- el backend valida nuevamente el JWT usando `issuer` y `audience`;
+- los endpoints funcionales de cursos, estudiantes, inscripciones y gestion de resumen se mantienen.
 
 ## Arquitectura general
 
@@ -48,6 +59,14 @@ La solucion sigue una arquitectura por capas orientada a una API REST con respon
 - capa `dto`: modela solicitudes y respuestas de la API;
 - capa `config`: centraliza configuraciones tecnicas, como AWS S3;
 - capa `exception`: maneja errores de forma uniforme.
+
+Adicionalmente, para Semana 05 se considera el siguiente flujo de seguridad y consumo:
+
+1. Postman o un cliente REST obtiene un token JWT emitido por Azure AD B2C.
+2. El cliente invoca AWS API Gateway usando `Authorization: Bearer <token>`.
+3. API Gateway valida el JWT mediante su `authorizer`.
+4. Spring Boot recibe la solicitud y vuelve a validar el JWT mediante `Spring Security` y `OAuth2 Resource Server`.
+5. Una vez validado el acceso, la aplicacion interactua con Oracle Cloud y AWS S3 segun la operacion solicitada.
 
 ## Estructura por capas del proyecto
 
@@ -82,6 +101,7 @@ src/main/java/com/duoc/cloudnativeapp
 
 ## Endpoints especificos de inscripcion y gestion de resumen
 
+- `GET /api/health`
 - `POST /api/inscripciones`
 - `POST /api/inscripciones/{id}/generar-archivo`
 - `POST /api/inscripciones/{id}/subir-s3`
@@ -89,7 +109,6 @@ src/main/java/com/duoc/cloudnativeapp
 - `GET /api/inscripciones/{id}/descargar-s3`
 - `PUT /api/inscripciones/{id}/reemplazar-s3`
 - `DELETE /api/inscripciones/{id}/eliminar-s3`
-- `GET /api/health`
 
 ### Ejemplo de creacion de inscripcion
 
@@ -137,6 +156,8 @@ src/main/java/com/duoc/cloudnativeapp
 - `DB_USERNAME`
 - `DB_PASSWORD`
 - `SERVER_PORT`
+- `JWT_ISSUER_URI`
+- `JWT_AUDIENCE`
 - `AWS_REGION`
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
@@ -151,6 +172,8 @@ export DB_URL=jdbc:oracle:thin:@servidor:1521/servicio
 export DB_USERNAME=usuario
 export DB_PASSWORD=clave
 export SERVER_PORT=8080
+export JWT_ISSUER_URI=https://tu-tenant.b2clogin.com/tu-tenant.onmicrosoft.com/v2.0/
+export JWT_AUDIENCE=tu_application_client_id
 export AWS_REGION=us-east-1
 export AWS_ACCESS_KEY_ID=tu_access_key
 export AWS_SECRET_ACCESS_KEY=tu_secret_key
@@ -167,50 +190,78 @@ export RESUMENES_PATH=archivos/resumenes
 ./mvnw spring-boot:run
 ```
 
-### 2. Verificar salud
+### 2. Verificar salud tecnica del contenedor o instancia
 
 ```bash
-curl http://localhost:8080/api/health
+curl http://localhost:8080/actuator/health
 ```
 
-### 3. Crear datos base
+### 3. Obtener un token JWT valido desde Azure AD B2C
+
+Para probar los endpoints protegidos en Semana 05, se debe invocar la API usando `Authorization: Bearer <token>`.
+
+### 4. Verificar el endpoint `/api/health`
+
+Sin token, la respuesta esperada es `401 Unauthorized`.
+
+Con token valido, el flujo esperado es:
+
+```bash
+curl http://localhost:8080/api/health \
+  -H "Authorization: Bearer <token>"
+```
+
+### 5. Crear datos base
 
 Se recomienda crear primero cursos y estudiantes antes de registrar una inscripcion.
 
 Ejemplos de rutas:
 
-- `POST /api/cursos`
-- `POST /api/estudiantes`
+- `POST /api/cursos` con `Authorization: Bearer <token>`
+- `POST /api/estudiantes` con `Authorization: Bearer <token>`
 
-### 4. Crear una inscripcion
+### 6. Crear una inscripcion
 
 ```bash
 curl -X POST http://localhost:8080/api/inscripciones \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{"estudianteId":1,"cursosIds":[1,2]}'
 ```
 
-### 5. Probar la gestion del resumen
+### 7. Probar la gestion del resumen
 
 ```bash
-curl -X POST http://localhost:8080/api/inscripciones/1/generar-archivo
-curl -X POST http://localhost:8080/api/inscripciones/1/subir-s3
-curl http://localhost:8080/api/inscripciones/1/consultar-s3
-curl -OJ http://localhost:8080/api/inscripciones/1/descargar-s3
-curl -X PUT http://localhost:8080/api/inscripciones/1/reemplazar-s3
-curl -X DELETE http://localhost:8080/api/inscripciones/1/eliminar-s3
+curl -X POST http://localhost:8080/api/inscripciones/1/generar-archivo -H "Authorization: Bearer <token>"
+curl -X POST http://localhost:8080/api/inscripciones/1/subir-s3 -H "Authorization: Bearer <token>"
+curl http://localhost:8080/api/inscripciones/1/consultar-s3 -H "Authorization: Bearer <token>"
+curl -OJ http://localhost:8080/api/inscripciones/1/descargar-s3 -H "Authorization: Bearer <token>"
+curl -X PUT http://localhost:8080/api/inscripciones/1/reemplazar-s3 -H "Authorization: Bearer <token>"
+curl -X DELETE http://localhost:8080/api/inscripciones/1/eliminar-s3 -H "Authorization: Bearer <token>"
 ```
 
 En Postman se puede seguir el mismo flujo usando los metodos y rutas indicadas.
 
+## Despliegue automatizado en EC2
+
+El proyecto considera despliegue automatizado mediante GitHub Actions hacia una instancia EC2 utilizando Docker.
+
+Para este flujo se mantienen los secretos ya utilizados por Oracle Cloud, AWS S3, Docker Hub y EC2, agregando ademas los parametros de seguridad JWT del backend:
+
+- `JWT_ISSUER_URI`: valor exacto del claim `iss` emitido por Azure AD B2C;
+- `JWT_AUDIENCE`: valor exacto del claim `aud` esperado por el backend Spring Boot.
+
+El workflow de despliegue debe inyectar estos secretos en el archivo `.env` utilizado por `docker-compose.ec2.yml`, de modo que el contenedor arranque con la configuracion de `Spring Security` y `OAuth2 Resource Server`.
+
 ## Configuracion esperada en AWS API Gateway
 
-Para la continuidad de Semana 04, se documenta la preparacion del backend para ser expuesto mediante AWS API Gateway:
+Para la continuidad de Semana 04 y Semana 05, se documenta la preparacion del backend para ser expuesto mediante AWS API Gateway:
 
 1. Se crea una API HTTP o REST en API Gateway.
 2. Se registran las rutas del backend con su metodo HTTP correspondiente.
 3. Se configura la integracion hacia la URL publica del backend desplegado.
-4. Se publican al menos los endpoints de cursos, estudiantes, inscripciones, salud y gestion de resumen.
+4. Se configura el `JWT Authorizer` usando los parametros del proveedor IDaaS.
+5. Se publican al menos los endpoints de cursos, estudiantes, inscripciones, salud y gestion de resumen.
 
 Rutas relevantes para publicar:
 
@@ -230,7 +281,7 @@ Rutas relevantes para publicar:
 
 ## Configuracion esperada del IDaaS con Azure AD B2C
 
-Para esta entrega se considera un escenario en que la autenticacion es administrada por un proveedor IDaaS y validada en AWS API Gateway.
+Para esta entrega se considera un escenario en que la autenticacion es administrada por un proveedor IDaaS y validada tanto en AWS API Gateway como en el backend Spring Boot.
 
 De forma esperada, la configuracion contempla:
 
@@ -238,18 +289,21 @@ De forma esperada, la configuracion contempla:
 - emision de tokens JWT para los consumidores autorizados;
 - exposicion del `issuer` y de la configuracion de firma correspondiente;
 - integracion del JWT Authorizer de API Gateway con los parametros del proveedor;
-- definicion de audiencias validas para los clientes que consumiran la API.
+- definicion de audiencias validas para los clientes que consumiran la API;
+- configuracion de `JWT_ISSUER_URI` y `JWT_AUDIENCE` para el `OAuth2 Resource Server` del backend.
 
 Esta documentacion no afirma que Azure AD B2C o API Gateway ya se encuentren operativos en un entorno productivo; se documenta la preparacion del backend para ese escenario.
 
-## Explicacion de autenticacion
+## Explicacion de autenticacion y seguridad
 
-En esta version del proyecto, la autenticacion se entiende de la siguiente manera:
+En Semana 05, la autenticacion y autorizacion esperada se entienden de la siguiente manera:
 
 - sin token JWT, API Gateway debe responder `Unauthorized`;
 - con un token JWT valido, API Gateway permite consumir el endpoint expuesto;
-- Spring Boot no valida directamente el JWT en esta version;
-- la validacion JWT se gestiona en API Gateway, fuera del backend.
+- Spring Boot valida nuevamente el JWT usando `Spring Security` como `OAuth2 Resource Server`;
+- los endpoints `/api/**` requieren autenticacion;
+- `GET /api/health` requiere token valido;
+- `GET /actuator/health` puede permanecer habilitado sin autenticacion para chequeos tecnicos, segun la configuracion de seguridad del proyecto.
 
 ## Manejo de errores incorporado
 
@@ -279,8 +333,19 @@ Casos documentados:
 Se consideran pruebas automatizadas orientadas a validar la actualizacion y sus casos principales:
 
 - `HealthControllerIntegrationTest`
+- `SecurityIntegrationTest`
 - `ResumenArchivoServiceTest`
 - `S3StorageServiceTest`
+
+## Pruebas funcionales esperadas para Semana 05
+
+Para validar el comportamiento de seguridad en esta etapa, se espera comprobar al menos los siguientes escenarios:
+
+- llamada directa a EC2 sin token sobre `GET /api/health` debe responder `401 Unauthorized`;
+- llamada directa a EC2 con `Bearer Token` valido sobre `GET /api/health` debe responder `200 OK`;
+- llamada via API Gateway sin token debe responder `401 Unauthorized`;
+- llamada via API Gateway con `Bearer Token` valido debe responder `200 OK`;
+- endpoints funcionales como cursos, estudiantes, inscripciones y operaciones S3 deben consumirse usando `Authorization: Bearer <token>`.
 
 ## Comandos utiles
 
@@ -291,4 +356,4 @@ Se consideran pruebas automatizadas orientadas a validar la actualizacion y sus 
 
 ## Nota final
 
-Este `README.md` consolida la actualizacion documental de Semana 04 como continuidad del desarrollo realizado en Semana 01 y Semana 02, dejando el proyecto preparado para continuar con las siguientes semanas de la asignatura.
+Este `README.md` consolida la continuidad academica del proyecto desde Semana 01 y Semana 02, pasando por la exposicion mediante API Gateway en Semana 04 y agregando en Semana 05 una segunda capa de seguridad con `Spring Security` en el backend.

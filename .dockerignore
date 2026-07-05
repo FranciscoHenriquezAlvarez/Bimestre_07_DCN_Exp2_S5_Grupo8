@@ -6,3 +6,4 @@ target
 *.log
 *.iml
 archivos
+*Zone.Identifier
