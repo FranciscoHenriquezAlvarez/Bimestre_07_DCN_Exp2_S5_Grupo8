@@ -57,7 +57,16 @@ jobs:
           script: |
             DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
 
-            mkdir -p "$DEPLOY_PATH/archivos/resumenes"
+            mkdir -p "$DEPLOY_PATH"
+
+            if ! mountpoint -q /mnt/efs; then
+              echo "ERROR: EFS no esta montado en /mnt/efs"
+              exit 1
+            fi
+
+            sudo mkdir -p /mnt/efs/resumenes
+            sudo chown -R ec2-user:ec2-user /mnt/efs/resumenes
+
             cd "$DEPLOY_PATH"
 
             cat > docker-compose.ec2.yml <<'EOF'
@@ -83,7 +92,7 @@ jobs:
                   RESUMENES_PATH: ${RESUMENES_PATH:-/app/archivos/resumenes}
                 volumes:
                   - /home/ec2-user/wallets/Wallet_cloudnativeapp:/app/wallet:ro
-                  - /home/ec2-user/cloudnativeapp/archivos/resumenes:${RESUMENES_PATH:-/app/archivos/resumenes}
+                  - /mnt/efs/resumenes:${RESUMENES_PATH:-/app/archivos/resumenes}
             EOF
 
             cat > .env <<'EOF'
