@@ -21,21 +21,21 @@ class SecurityIntegrationTest {
     private MockMvc mockMvc;
 
     @Test
-    void debePermitirHealthDeActuatorSinAutenticacion() throws Exception {
-        mockMvc.perform(get("/actuator/health"))
-                .andExpect(status().isOk());
+    void debePermitirApiHealthSinAutenticacion() throws Exception {
+        mockMvc.perform(get("/api/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("OK"));
     }
 
     @Test
-    void debeResponder401EnApiHealthSinToken() throws Exception {
-        mockMvc.perform(get("/api/health"))
+    void debeResponder401EnCursosSinToken() throws Exception {
+        mockMvc.perform(get("/api/cursos"))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void debePermitirApiHealthConJwtValido() throws Exception {
-        mockMvc.perform(get("/api/health").with(jwt()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("OK"));
+    void debePermitirCursosConJwtValido() throws Exception {
+        mockMvc.perform(get("/api/cursos").with(jwt()))
+                .andExpect(status().isOk());
     }
 }
