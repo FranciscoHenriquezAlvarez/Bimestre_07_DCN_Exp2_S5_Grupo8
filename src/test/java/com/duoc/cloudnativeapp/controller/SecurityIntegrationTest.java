@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -34,8 +35,22 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    void debePermitirCursosConJwtValido() throws Exception {
-        mockMvc.perform(get("/api/cursos").with(jwt()))
+    void debePermitirCursosConAuthorityProfesor() throws Exception {
+        mockMvc.perform(get("/api/cursos")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("PROFESOR"))))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void debeResponder403EnCursosConAuthorityEstudiante() throws Exception {
+        mockMvc.perform(get("/api/cursos")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ESTUDIANTE"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void debeResponder401EnDescargaS3SinToken() throws Exception {
+        mockMvc.perform(get("/api/inscripciones/1/descargar-s3"))
+                .andExpect(status().isUnauthorized());
     }
 }
