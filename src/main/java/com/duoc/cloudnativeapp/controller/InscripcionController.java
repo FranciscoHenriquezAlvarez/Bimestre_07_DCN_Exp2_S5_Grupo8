@@ -3,7 +3,10 @@ package com.duoc.cloudnativeapp.controller;
 import com.duoc.cloudnativeapp.dto.ArchivoResumenResponseDTO;
 import com.duoc.cloudnativeapp.dto.InscripcionRequestDTO;
 import com.duoc.cloudnativeapp.dto.InscripcionResumenDTO;
+import com.duoc.cloudnativeapp.dto.ResumenInscripcionMensaje;
+import com.duoc.cloudnativeapp.model.ResumenInscripcionMq;
 import com.duoc.cloudnativeapp.service.InscripcionService;
+import com.duoc.cloudnativeapp.service.ResumenInscripcionMqService;
 import com.duoc.cloudnativeapp.service.ResumenArchivoService;
 import com.duoc.cloudnativeapp.service.S3StorageService;
 import jakarta.validation.Valid;
@@ -32,14 +35,17 @@ public class InscripcionController {
     private final InscripcionService inscripcionService;
     private final ResumenArchivoService resumenArchivoService;
     private final S3StorageService s3StorageService;
+    private final ResumenInscripcionMqService resumenInscripcionMqService;
 
     // Inyeccion del servicio por constructor
     public InscripcionController(InscripcionService inscripcionService,
                                  ResumenArchivoService resumenArchivoService,
-                                 S3StorageService s3StorageService) {
+                                 S3StorageService s3StorageService,
+                                 ResumenInscripcionMqService resumenInscripcionMqService) {
         this.inscripcionService = inscripcionService;
         this.resumenArchivoService = resumenArchivoService;
         this.s3StorageService = s3StorageService;
+        this.resumenInscripcionMqService = resumenInscripcionMqService;
     }
 
     @GetMapping
@@ -50,6 +56,28 @@ public class InscripcionController {
     @PostMapping
     public ResponseEntity<InscripcionResumenDTO> crear(@Valid @RequestBody InscripcionRequestDTO inscripcionRequestDTO) {
         return ResponseEntity.status(HttpStatus.CREATED).body(inscripcionService.guardar(inscripcionRequestDTO));
+    }
+
+    // Envia el resumen de una inscripcion a RabbitMQ para procesamiento asincrono.
+    @PostMapping("/{inscripcionId}/enviar-mq")
+    public ResponseEntity<ResumenInscripcionMensaje> enviarResumenAMq(@PathVariable Long inscripcionId) {
+        return ResponseEntity.ok(resumenInscripcionMqService.enviarResumenACola(inscripcionId));
+    }
+
+    // Consume un resumen pendiente desde RabbitMQ y lo guarda en Oracle Cloud.
+    @PostMapping("/resumenes/consumir-mq")
+    public ResponseEntity<ResumenInscripcionMq> consumirResumenDesdeMq() {
+        ResumenInscripcionMq resumenProcesado = resumenInscripcionMqService.consumirResumenDesdeCola();
+        if (resumenProcesado == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(resumenProcesado);
+    }
+
+    // Lista los resumenes procesados y persistidos luego del consumo desde RabbitMQ.
+    @GetMapping("/resumenes-mq")
+    public ResponseEntity<List<ResumenInscripcionMq>> listarResumenesMq() {
+        return ResponseEntity.ok(resumenInscripcionMqService.listarResumenesProcesados());
     }
 
     // Genera el archivo fisico del resumen de inscripcion.

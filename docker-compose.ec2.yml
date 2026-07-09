@@ -1,8 +1,21 @@
 services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
   cloudnativeapp:
     image: ${IMAGE_NAME}:${IMAGE_TAG:-latest}
     container_name: ${CONTAINER_NAME:-cloudnativeapp}
     restart: unless-stopped
+    depends_on:
+      - rabbitmq
     ports:
       - "8080:8080"
     environment:
@@ -19,6 +32,10 @@ services:
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
       AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME}
       RESUMENES_PATH: ${RESUMENES_PATH:-/app/archivos/resumenes}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
     volumes:
       - /home/ec2-user/wallets/Wallet_cloudnativeapp:/app/wallet:ro
       - /mnt/efs/resumenes:${RESUMENES_PATH:-/app/archivos/resumenes}

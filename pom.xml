@@ -49,6 +49,12 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- Soporte de mensajeria AMQP con RabbitMQ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
         <!-- Seguridad para proteger la API y validar tokens JWT -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
