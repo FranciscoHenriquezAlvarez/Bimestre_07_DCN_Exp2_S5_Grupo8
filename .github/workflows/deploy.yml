@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+      - semana07-rabbitMQ
+  workflow_dispatch:
 
 env:
   IMAGE_REPOSITORY: ${{ secrets.DOCKERHUB_USERNAME }}/cloudnativeapp
